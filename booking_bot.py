@@ -1,5 +1,3 @@
-import datetime
-import time
 import logging
 import re
 from selenium import webdriver
@@ -16,7 +14,8 @@ class BookingBotMyFitness:
         self.headless = headless
         self.driver = None
         self.base_url = "https://www.myfitness.lv"
-        self.club_url = f"{self.base_url}/club/galerija-centrs/nodarbibu-saraksts/"
+        self.club = "galerija-centrs"
+        self.club_url = f"{self.base_url}/club/{self.club}/nodarbibu-saraksts/"
         self.logged_in = False
         
         # Set up logging
@@ -45,15 +44,13 @@ class BookingBotMyFitness:
 
         self.driver.get(self.base_url) # Navigate to the website
 
-    def accept_cookies(self):
-        """Accept all cookies on the website."""
-        try:
+        try: # Accept cookies
             cookie_button = WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[@id='CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll']")))
             cookie_button.click()
             self.logger.info("Cookie popup accepted")
         except TimeoutException:
             self.logger.info("No cookie popup detected")
-    
+
     def close_add(self):
         try: # Check if any other dialog popup is present and close it
             close_button = WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='c-dialog__close']")))
@@ -110,71 +107,6 @@ class BookingBotMyFitness:
         """Get the current week identifier from the page."""
         week_element = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, "//span[@data-week and not (contains(@class, 'hidden'))]")))
         return week_element.get_attribute("data-week")
-    
-    def wait_for_schedule_update(self):
-        """Wait until Sunday 20:00 for the schedule update."""
-        self.logger.info("Waiting for schedule update...")
-        
-        # Get the current time and calculate when the next Sunday 20:00 is
-        now = datetime.datetime.now()
-        days_until_sunday = 6 - now.weekday() if now.weekday() < 6 else 0
-        
-        target_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
-        if days_until_sunday == 0 and now.time() >= datetime.time(20, 0):
-            # If it's Sunday after 20:00, schedule for next Sunday
-            target_time += datetime.timedelta(days=7)
-        else:
-            target_time += datetime.timedelta(days=days_until_sunday)
-        
-        self.logger.info(f"Schedule update expected at: {target_time}")
-        
-        # Wait until 19:59 on the target day
-        while datetime.datetime.now() < (target_time - datetime.timedelta(minutes=1)):
-            time_left = target_time - datetime.datetime.now()
-            if time_left.total_seconds() % 3600 < 10:  # Log every hour
-                hours_left = time_left.total_seconds() / 3600
-                self.logger.info(f"Approximately {hours_left:.1f} hours until schedule update")
-            time.sleep(60)  # Check every minute
-        
-        self.logger.info("It's almost time for the schedule update. Starting frequent checks...")
-        
-        # Get the current week before the update
-        self.navigate_to_schedule()
-        current_week = self.get_current_week()
-        self.logger.info(f"Current week before update: {current_week}")
-        
-        # Start refreshing until we detect a week change
-        detected = False
-        refresh_count = 0
-        
-        # Begin more frequent checks at 19:59
-        while not detected:
-            now = datetime.datetime.now()
-            if now >= target_time:
-                # After 20:00, check very frequently
-                time.sleep(2)  # Refresh every 2 seconds
-                
-                self.driver.refresh()
-                try:
-                    # Wait for the page to load
-                    WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, "//table[@class='timetable-table']")))
-                    
-                    # Check if the week has changed
-                    new_week = self.get_current_week()
-                    refresh_count += 1
-                    
-                    if new_week != current_week:
-                        self.logger.info(f"Schedule update detected after {refresh_count} refreshes! New week: {new_week}")
-                        detected = True
-                    
-                    if refresh_count % 10 == 0:
-                        self.logger.info(f"Still waiting for update. Refreshed {refresh_count} times.")
-                        
-                except TimeoutException:
-                    self.logger.warning("Page refresh timed out, will try again")
-                    
-            else: # It's not 20:00 yet, wait a bit longer
-                time.sleep(10)
     
     def go_to_next_week(self):
         """Navigate to the next week's schedule."""
@@ -277,17 +209,12 @@ class BookingBotMyFitness:
         try:
             self.logger.info("Starting MyFitness booking bot")
             self.setup_browser()
-            self.accept_cookies()
             self.close_add()
 
             self.login()
+
             self.navigate_to_schedule()
             self.close_add()
-
-            self.logger.info("Waiting for schedule update on Sunday at 20:00")
-            self.wait_for_schedule_update()
-            
-            self.logger.info("Schedule update detected, proceeding to book classes")
             self.go_to_next_week()
             
             classes = self.find_target_classes()
