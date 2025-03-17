@@ -22,7 +22,7 @@ if __name__ == "__main__":
         now = datetime.datetime.now()
         
         # Schedule the job
-        if now.weekday() == 0 and now.hour == 20 and now.minute ==41:
+        if now.weekday() == 6 and now.hour == 20 and now.minute == 00:
             job()
             break
 
