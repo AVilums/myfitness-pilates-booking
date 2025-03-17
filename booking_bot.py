@@ -11,11 +11,16 @@ class BookingBotMyFitness:
         self.email = email
         self.password = password
         self.target_class = target_class
+        self.class_id = None
         self.headless = headless
         self.driver = None
         self.base_url = "https://www.myfitness.lv"
         self.club = "galerija-centrs"
         self.club_url = f"{self.base_url}/club/{self.club}/nodarbibu-saraksts/"
+        self.post_login_url = f"{self.base_url}/biedra-zona/sakums/"
+        self.register_url = f"{self.base_url}/biedra-zona/nodarbibu-rezervacija/"
+        self.register_url = f"{self.base_url}/club/{self.club}/nodarbibu-saraksts/?class_id={self.class_id}&class_action=register"
+        
         self.logged_in = False
         
         # Set up logging
@@ -75,7 +80,7 @@ class BookingBotMyFitness:
             # Enter credentials
             username_field = WebDriverWait(self.driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//input[@id='login-field-username']")))
             password_field = self.driver.find_element(By.XPATH, "//input[@id='login-field-password']")
-            
+
             username_field.send_keys(self.email)
             password_field.send_keys(self.password)
             
@@ -84,7 +89,7 @@ class BookingBotMyFitness:
             login_button.click()
             
             # Wait for login to complete by checking the URL change
-            WebDriverWait(self.driver, 60).until(EC.url_to_be("https://www.myfitness.lv/biedra-zona/sakums/"))
+            WebDriverWait(self.driver, 60).until(EC.url_to_be(self.post_login_url))
             
             self.logged_in = True
             self.logger.info("Login successful")
@@ -115,7 +120,7 @@ class BookingBotMyFitness:
             next_week_button = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//div[@class='week-nav-item next-week']")))
             next_week_button.click()
             
-            # Wait for <div class="loader notice success" style="display: none;">Lūdzu uzgaidi</div> to change back to display: none
+            # Wait to change back to display: none
             WebDriverWait(self.driver, 15).until(EC.invisibility_of_element_located((By.XPATH, "//div[@class='loader notice success']")))
 
             self.logger.info("Next week's schedule loaded")
@@ -123,6 +128,8 @@ class BookingBotMyFitness:
         except Exception as e:
             self.logger.error(f"Failed to navigate to next week: {str(e)}")
             raise
+
+        input("Press Enter to continue...")
     
     def find_target_classes(self):
         """Find all Hot Pilates Sculpt classes available for booking."""
@@ -183,13 +190,11 @@ class BookingBotMyFitness:
                     print(f"Error: Could not extract class_id from {class_info['booking_link']}")
                     continue
 
-                class_id = match.group(1)
+                self.class_id = match.group(1)
+                self.register_url = f"{self.base_url}/club/{self.club}/nodarbibu-saraksts/?class_id={self.class_id}&class_action=register"
 
-                # Construct the correct registration URL
-                booking_link = f"https://www.myfitness.lv/club/galerija-centrs/nodarbibu-saraksts/?class_id={class_id}&class_action=register"
-
-                # Navigate directly to the correct registration link
-                self.driver.get(booking_link)
+                # Navigate directly to the registration link
+                self.driver.get(self.register_url)
 
                 # Wait for booking confirmation modal to appear
                 WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, "//div[@class='m-modal comment-modal' and @style='display: block;']")))
